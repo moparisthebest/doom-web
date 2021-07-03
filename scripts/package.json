@@ -1,14 +1,14 @@
 {
   "name": "doomws",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "example websocket server for chocolate-doom",
+  "main": "router.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "moparisthebest <admin@moparisthebest.com>",
+  "license": "AGPL-3.0-or-later",
   "devDependencies": {
-    "ws": "^7.4.5"
+    "ws": "^7.5"
   }
 }

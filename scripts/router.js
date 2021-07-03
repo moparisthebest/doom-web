@@ -1,66 +1,87 @@
 #!/usr/bin/env node
 
 /*
- * Simple HTTP and WebSockets server & message router to test doom-wasm locally
- * HTTP at 8000, WebSockets at 8001
+ * websocket server for chocolate-doom fork
+ * Copyright (C) 2021  Travis Burtrum (moparisthebest)
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
+ * for local testing run `./router.js 8001 8000` which puts HTTP at 8000, WebSockets at 8001
+ * for production, just run `./router.js 8001` which only listens WebSockets at 8001 (set nginx to forward)
  */
 
-const WebSocket = require('ws')
-const fs = require('fs')
-const url = require('url')
-const http = require('http')
-const path = require('path')
+let websocketPort = process.argv[2] || 8001;
+let webserverPort = process.argv[3];
 
-const server = http.createServer()
+console.log(`websocket listening on port ${websocketPort}`);
+const WebSocket = require('ws')
 const wss = new WebSocket.Server({
-  port: 8001,
+  port: websocketPort,
   noServer: true,
   perMessageDeflate: false,
-  clientTracking: true,
+  clientTracking: false,
   verifyClient: false,
 })
 
-const root = __dirname + '/../assets'
+const games = new Map();
+let gamesCount = 0;
+let clientCount = 0;
 
-clients = []
-uids = 0
-
-wss.on('connection', function connection(ws) {
-  ws.on('message', function incoming(data) {
-    from = data.slice(4, 8).readUInt32LE()
-    to = data.slice(0, 4).readUInt32LE()
-    console.log(`< ${data.toString('hex')} (from: ${from}, to ${to})`)
-    // if it's a new client, add it to the table of clients
-    if (clients.map(c => c.from).indexOf(from) == -1) {
-      ws.id = uids++
-      clients.push({
-        from: from,
-        id: ws.id,
-      })
+wss.on('connection', function npm(ws, req) {
+    console.log('new ws connection');
+    ++clientCount;
+    const game = req.url.substring(req.url.lastIndexOf('/') + 1, req.url.length);
+    console.log(`game: ${game}`);
+    let clients = games.get(game);
+    if (clients === undefined) {
+        clients = [];
+        games.set(game, clients);
+        ++gamesCount;
     }
+    clients.push(ws);
+
+  ws.on('message', function incoming(data) {
+    if (ws.from === undefined) {
+        ws.from = data.slice(4, 8).readUInt32LE();
+    }
+    let to = data.slice(0, 4).readUInt32LE()
+    // console.log(`< ${data.toString('hex')} (from: ${ws.from}, to ${to})`)
     // send this packet to the corresponding client
-    i = clients.map(c => c.from).indexOf(to)
-    if (i != -1) {
-      wss.clients.forEach(function each(client) {
+      clients.forEach(function each(client) {
         if (
-          client.id == clients[i].id &&
+          client.from === to &&
           client.readyState === WebSocket.OPEN
         ) {
-          console.log(`> ${data.slice(4).toString('hex')} (to: ${to})`)
+          //console.log(`> ${data.slice(4).toString('hex')} (to: ${to})`)
           client.send(data.slice(4))
         }
-      })
-    }
-  })
+      });
+  });
 
   ws.on('close', function close() {
-    i = clients.map(e => e.id).indexOf(ws.id)
+    let i = clients.map(e => e.from).indexOf(ws.from);
     if (i != -1) {
       clients.splice(i, 1)
+      --clientCount;
     }
-    console.log(`client ${ws.id} disconnected`)
-  })
-})
+    if (clients.length === 0) {
+      games.delete(game);
+      --gamesCount;
+    }
+    console.log(`client ${ws.from} disconnected from game ${game}`)
+  });
+});
 
 wss.on('error', err => {
   console.log('we got an error:\n')
@@ -68,8 +89,21 @@ wss.on('error', err => {
 })
 
 setInterval(() => {
-  console.log(`# clients: ${clients.length}`)
-}, 5000)
+  console.log(`# games: ${gamesCount} clients: ${clientCount}`)
+}, 5000);
+
+if (webserverPort === undefined) {
+    console.log("not listening on webserverPort, this is what you want for production");
+} else {
+    console.log(`webserver listening on port ${websocketPort}, DO NOT DO THIS IN PRODUCTION, use nginx instead!`);
+
+const fs = require('fs')
+const url = require('url')
+const http = require('http')
+const path = require('path')
+
+const server = http.createServer()
+const root = __dirname + '/../assets'
 
 mimes = {
   html: 'text/html',
@@ -81,56 +115,31 @@ mimes = {
   wasm: 'application/wasm',
   map: 'text/plain',
   png: 'image/png',
-}
-
-function jsonReply(response, json, status) {
-  response.statusCode = status
-  response.setHeader('Content-Type', 'application/json;charset=UTF-8')
-  response.setHeader('Access-Control-Allow-Origin', '*')
-  response.write(JSON.stringify(json))
-  response.end()
+  woff2: 'font/woff2',
 }
 
 server.on('request', (request, response) => {
-  const { method, url, headers } = request
-
-  mockRoom = '12344567890-1234567890'
+  const { method, url } = request;
+        console.log(`GET ${url}`);
 
   if (method === 'GET') {
-    switch (url) {
-      case `/api/room/${mockRoom}`:
-        jsonReply(
-          response,
-          {
-            room: mockRoom,
-            gameStarted: false
-          },
-          200,
-        )
-        break
-      case '/api/newroom':
-        jsonReply(
-          response,
-          {
-            room: mockRoom,
-          },
-          200,
-        )
-        break
-      default:
-        var name = url == '/' ? 'index.html' : url
+        // no directories under assets for now
+        const safe_url = url.substring(url.lastIndexOf('/'), url.length);
+        console.log(`GET ${safe_url}`);
+        
+        var name = safe_url == '/' ? 'index.html' : safe_url;
         file = path.join(root, '/', name)
         if (!fs.existsSync(file)) file = path.join(root, '/index.html')
         var ext = file.split('.').slice(-1)[0]
-        console.log(`200 ${file} (${mimes[ext]})`)
+        //console.log(`200 ${file} (${mimes[ext]})`)
         response.statusCode = 200
         response.setHeader('Content-Type', mimes[ext])
         response.write(fs.readFileSync(file, null))
         response.end()
-        break
-    }
   }
 })
 
-console.log(`Point your browser to http://0.0.0.0:8000`);
-server.listen(8000)
+console.log(`Point your browser to http://0.0.0.0:${webserverPort}`);
+server.listen(webserverPort)
+
+}

@@ -8,15 +8,17 @@ const hasWebAssembly = () => {
     return false;
 };
 
-if (window.location.hostname == "0.0.0.0") {
-    web = "http://0.0.0.0:8000";
-    base = "http://0.0.0.0:8000";
-    wsbase = "ws://0.0.0.0:8001";
-} else {
-    web = "https://silentspacemarine.com";
-    base = "https://router.silentspacemarine.com";
-    wsbase = "wss://router.silentspacemarine.com";
+// this should handle any subfolder or no subfolder
+let web = window.location + "";
+web = web.substring(0, web.lastIndexOf('/'));
+const base = web;
+let wsbase = web.replace(/^http/i, 'ws');
+// special case development server
+if (web.startsWith('http://0.0.0.0:8000')) {
+    wsbase = wsbase.replace(':8000', ':8001');
 }
+wsbase += '/ws';
+console.log(`web: '${web}' base: '${base}' wsbase: '${wsbase}'`);
 
 timer = false;
 room = false;
@@ -346,23 +348,30 @@ choosePet = (next) => {
     });
 };
 
+const randomRoom = (length = 64) => {
+    let chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let str = '';
+    for (let i = 0; i < length; i++) {
+        str += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return str;
+};
+
 startMultiplayer = () => {
     display(["buttons", "text"], "none");
-    fetch(`${base}/api/newroom`)
-        .then((response) => response.json())
-        .then((data) => {
+    let room = randomRoom();
+    console.log(`room: ${room}`);
             choosePet(() => {
                 deathMatchOr(() => {
                     display(["logo"], "none");
-                    room = data.room;
                     var t = '<h1 class="vspace">Doom Multiplayer is about to start</h1>';
                     t += '<h1 class="vspace">Share this permalink with your friends:</h1>';
-                    t += `<h1><a class="perma h" data-clipboard-text="${web}/${room}">${web}/${room.slice(0, 8)}...${room.slice(-8)}</a></h1>`;
+                    t += `<h1><a class="perma h" href="${web}#${room}">${web}#${room.slice(0, 8)}...${room.slice(-8)}</a></h1>`;
                     t += '<h1 class="vspace">Your friends can join until you start the game</h1>';
                     t += "<h1>Move to next the screen, wait for them, and</h1>";
                     t += "<h1>then hit space to start the game</h1><h1/>";
                     t += '<div class="vspace">';
-                    t += `<a id="clip" class="btn tertiary perma" data-clipboard-text="${web}/${room}" data-room="${room}">Copy Permalink</a>`;
+                    t += `<a id="clip" class="btn tertiary perma" data-clipboard-text="${web}#${room}" data-room="${room}">Copy Permalink</a>`;
                     t += `<a class="btn secondary" id="start" data-room="${room}">Next</a>`;
                     t += "</div>";
                     write(t);
@@ -370,14 +379,14 @@ startMultiplayer = () => {
                     clp.on("success", () => {
                         clickEffect("clip");
                     });
+                    window.location.hash = "#" + room;
                     onClick("start", (e) => {
                         display(["menu"], "none");
                         display(["canvas"]);
-                        callMain(commonArgs.concat(["-server", "-privateserver", "-dup", "1", "-wss", `${wsbase}/api/ws/${e.target.getAttribute("data-room")}`]));
+                        callMain(commonArgs.concat(["-server", "-privateserver", "-dup", "1", "-wss", `${wsbase}/${e.target.getAttribute("data-room")}`]));
                     });
                 });
             });
-        });
 };
 
 var commonArgs = ["-iwad", "doom1.wad", "-window", "-nogui", "-nomusic", "-config", "default.cfg", "-servername", "doomflare", "-nodes", "4"];
@@ -403,35 +412,22 @@ var sendkey = (keys, type) => {
 if (hasWebAssembly()) {
     var Module = {
         onRuntimeInitialized: () => {
-            room = window.location.pathname.slice(1);
-            if (room.match(/[a-z0-9]+-[a-z0-9]+/g)) {
-                fetch(`${base}/api/room/${room}`)
-                    .then((response) => response.json())
-                    .then((data) => {
-                        if (data.room) {
-                            if (data.gameStarted == true) {
-                                write('<h1 class="vspace">Too late, this game has already started ;(</h1><h1>Redirecting you back...</h1>');
-                                setTimeout(() => {
-                                    window.location.replace("/");
-                                }, 7000);
-                            } else {
-                                setTimeout(() => {
+            //room = window.location.pathname.slice(1);
+            room = window.location.hash.substr(1);
+            console.log(`detected room: ${room}`);
+            if (room !== undefined && room.length > 0) {
+                console.log(`good room: ${room}`);
+
+
+                                //setTimeout(() => {
                                     choosePet(() => {
                                         display(["menu"], "none");
                                         display(["canvas"]);
                                         typewriter(["Connecting to master server. Please wait.", "Still trying. Is the master server for this room running?"]);
-                                        callMain(commonArgs.concat(["-connect", "1", "-dup", "1", "-wss", `${wsbase}/api/ws/${room}`]));
+                                        callMain(commonArgs.concat(["-connect", "1", "-dup", "1", "-wss", `${wsbase}/${room}`]));
                                     });
-                                }, 3000);
-                            }
-                        } else {
-                            display(["logo", "buttons"], "none");
-                            write("<h1>Invalid room. Redirecting.</h1>");
-                            setTimeout(() => {
-                                window.location.replace("/");
-                            }, 3000);
-                        }
-                    });
+                                //}, 3000);
+
             } else {
                 $("solo").className = "btn primary";
                 $("multiplayer").className = "btn secondary";
@@ -485,7 +481,7 @@ if (hasWebAssembly()) {
                 [id, msg] = text.slice(6).split(",");
                 switch (parseInt(id)) {
                     case 2:
-                        msg = ["Connected to Cloudflare WebSockets. Waiting for other players", "Still here, waiting for the host to start the game"];
+                        msg = ["Connected to WebSockets. Waiting for other players", "Still here, waiting for the host to start the game"];
                         break;
                     case 9: // connecting to ws failed
                         setTimeout(() => {

@@ -1,122 +1,52 @@
-# Multiplayer Doom Workers
+# Doom Multiplayer WebSockets
 
-This repo contains two Workers
+Try it in your browser at <https://doom.moparisthe.best>
 
-- Website for https://silentspacemarine.com/ in [Cloudflare Pages][3]
-- Wasm Doom message router, using [WebSockets][1] and [Durable Objects][2]
+This repo contains:
+
+- HTML+JavaScript front-end to play the [doom-wasm][3] port of [chocolate-doom][5] single player and multiplayer
+- WebSockets relay server to support multiplayer play
 
 ## Website
 
-Assets are in [./assets][8]
-
-Worker code is in [site/index.js][9]
+Assets are in [./assets][1]
 
 You need the following files in ```./assets``` (not included in this repo):
 
- * [doom1.wad][15] (md5sum: f0cefca49926d00903cf57551d901abe)
- * [websockets-doom.js][16] - get it from doom-wasm src directory after compilation
- * [websockets-doom.wasm][16] - get it from doom-wasm src directory after compilation
- * [websockets-doom.wasm.map][16] - get it from doom-wasm src directory after compilation
+ * [doom1.wad][2] (md5sum: f0cefca49926d00903cf57551d901abe)
+ * [websockets-doom.js][3] - get it from doom-wasm src directory after compilation
+ * [websockets-doom.wasm][3] - get it from doom-wasm src directory after compilation
+ * [websockets-doom.wasm.map][3] - get it from doom-wasm src directory after compilation
 
 ### To publish:
 
-```
-npm install -g @cloudflare/wrangler@beta
-wrangler login
-wrangler publish --config wrangler-site.toml
-```
-
-Adjust [wrangler-site.toml][4] to your ```account_id``` and ```zone_id```.
-
-## Wasm Doom message router
-
-Our message router has the following requirements:
-
-- Accept Wasm Doom WebSocket connections and build a routing table
-- Receive and parse the incoming messages
-- Broadcast the messages to the corresponding clients
-- Handle some REST APIs to create and validate Doom rooms (sessions)
-
-Just supports the network multiplayer in our [Silent Space Marine][6] showcase project.
-
-Read more about it in our [blog post here][5].
-
-The router source code is at [router/index.mjs][7]
-
-### To publish:
-
-First make sure you have [Durable Objects][10] enabled in your account.
-
-Make sure you have the Durable Objects wrangler (beta) installed:
-
-```
-npm install -g @cloudflare/wrangler@beta
-```
-
-Adjust [wrangler-router.toml][11] to your ```account_id``` and ```zone_id``` or use the ```CF_ACCOUNT_ID``` and ```CF_ZONE_ID``` environment [variables][14].
-
-Run this command just [once][12]
-
-```
-wrangler login
-wrangler publish --config wrangler-router.toml --new-class Router
-```
-
-Later updates use:
-
-```
-wrangler login
-wrangler publish --config wrangler-router.toml
-```
-
-### Makefile
-
-You can use ```make``` to deploy the workers.
-
-Create an ```.env``` file with your account and zone ids:
-
-```
-ROUTER_CF_ZONE_ID = 72...........91
-ROUTER_CF_ACCOUNT_ID = 0a...............2f
-SITE_CF_ZONE_ID = 13....................a0
-SITE_CF_ACCOUNT_ID = 07.................4f
-```
-
-Run ```make```:
-
-```
-make publish
-```
+ 1. Copy files in ./assets/ to a webserver capable of serving static files. If you don't want multiplayer skip the rest of the steps, you are done.
+ 2. Install [NodeJS and npm][4]
+ 2. Run `cd scripts && npm ci && ./router.js 8001` to run the WebSocket router on port 8001
+ 3. Configure your webserver to proxy websocket requests from `/ws/` to the above router
 
 ## Running Multiplayer Doom locally
 
-You can run the Website, Wasm Doom and Multiplayer locally, in your computer, using a NodeJS WebSocket router implementation.
+You can run the Website, Wasm Doom and Multiplayer locally.
 
-First install [NodeJS][13] and npm. Then:
+ 1. Install [NodeJS and npm][4]
+ 2. Run `cd scripts && npm ci && ./router.js 8001 8000` to run the WebSocket router on port 8001 and the static webserver on port 8000
+ 3. Point your browser to http://0.0.0.0:8000
 
-```
-cd scripts
-npm install
-./router.js
-```
+## Credits
 
-Point your browser to http://0.0.0.0:8000
+Most of the credit goes to the [chocolate-doom][5] community, who maintains the best doom source port.  [Cloudflare](https://blog.cloudflare.com/doom-multiplayer-workers/) wrote the initial version of this multiplayer webasm port, but relying on proprietary cloudflare technology, and not in a way that could possibly be upstreamed, this project aims to remedy those two failures.
 
-Read more about Multiplayer Doom on Cloudflare Workers in our [blog post here][5].
+## Todo:
 
-[1]: https://developers.cloudflare.com/workers/runtime-apis/websockets
-[2]: https://developers.cloudflare.com/workers/runtime-apis/durable-objects
-[3]: https://developers.cloudflare.com/pages/
-[4]: wrangler-site.toml
-[5]: https://blog.cloudflare.com/doom-multiplayer-workers
-[6]: https://silentspacemarine.com/
-[7]: router/index.mjs
-[8]: assets
-[9]: site/index.js
-[10]: https://developers.cloudflare.com/workers/learning/using-durable-objects
-[11]: wrangler-router.toml
-[12]: https://developers.cloudflare.com/workers/learning/using-durable-objects#publishing-durable-object-classes
-[13]: https://github.com/nvm-sh/nvm#installing-and-updating
-[14]: https://developers.cloudflare.com/workers/cli-wrangler/configuration
-[15]: https://doomwiki.org/wiki/DOOM1.WAD
-[16]: https://github.com/cloudflare/doom-wasm
+ * Support user-supplied wads
+ * Custom keymap support
+ * Game Save support
+ * Music support
+ * Clean up [doom-wasm][3] code and upstream it to [chocolate-doom][5] (either out of incompetence, malice, or laziness, cloudflare didn't fork this, and ran a source code formatter before applying their changes, so it's a total rewrite effort to get this done)
+
+[1]: assets
+[2]: http://distro.ibiblio.org/pub/linux/distributions/slitaz/sources/packages/d/doom1.wad
+[3]: https://github.com/cloudflare/doom-wasm
+[4]: https://github.com/Schniz/fnm
+[5]: https://github.com/chocolate-doom/chocolate-doom
